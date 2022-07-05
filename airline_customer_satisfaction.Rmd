@@ -1,0 +1,133 @@
+---
+title: 'Airline Customer Satisfaction' 
+subtitle: 'An analysis on which aspects of customer service airlines should focus on to increase market share.' 
+author: Mofoluwasho Akinlade
+date: May 8th, 2022
+output: 
+  html_notebook:
+    theme: united
+    toc: yes
+    depth: 2
+   
+    
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+
+
+```{r}
+library("forecast")
+library("zoo")
+library(psych)
+library(GPArotation)
+```
+
+## 1. Introduction 
+In recent months however, as travel restrictions have been lifted, demand for flight travel has risen significantly and airlines are scrambling to adjust to the level of consumer demand. Rising levels of consumer demand give airlines an opportunity to increase market share from pre-pandemic levels. This report seeks to advise airline executives on which factors of customer service to focus on to increase customer satisfaction and ultimately, market share. 
+
+The following analysis of an Airline Passenger Satisfaction dataset aims to discover which aspects of airline travel in both pre-flight and in-flight services impact customer satisfaction. Using the variable Satisfaction as a response, the model analyzes which predictor variables are significant in influencing airline passengers’ satisfaction and which predictor variables have stronger importance
+
+
+## 2. Supervised Learning: Logistical Regression 
+Before logistic regression can be done, the data set needed to be cleaned by removing repeated and unnecessary columns as well as converting all categorical variables to factors.
+
+```{r}
+datatrain = read.csv("train.csv")
+datatest = read.csv("test.csv")
+datatrain = datatrain[,-1:-2]
+datatest =  datatest[,-1:-2]
+datatrain$satisfaction = as.factor(datatrain$satisfaction)
+datatrain$Gender  = as.factor(datatrain$Gender)
+datatrain$Customer.Type    = as.factor(datatrain$Customer.Type)
+datatrain$Class  = as.factor(datatrain$Class)
+datatrain$Type.of.Travel  = as.factor(datatrain$Type.of.Travel)
+str(datatrain)
+```
+
+```{r}
+sum(is.na(datatrain))
+datatrain = na.omit(datatrain)
+datatest = na.omit(datatest)
+sum(is.na(datatrain))
+```
+
+
+```{r}
+datatrain$Satisfaction = model.matrix(~satisfaction, data = datatrain)[,2]
+#View(datatrain)
+```
+
+The objective of this analysis is to explore how airline passenger satisfaction can be improved. The first step to achieving this objective was to examine the factors that affect passenger satisfaction. Using the 23 variables from the data set, the logistic regression model used Satisfaction as the response variable and the remaining variables were set as the predictor variables. The reasoning behind the use of logistic regression was to explore how each variable affects the likelihood of passenger satisfaction so that the airline can make informed business decisions on what variables to improve on. 
+
+**What factors influence customer satisfaction?**
+To answer this model, a logistic regression model was fit with satisfaction as the response variable, and every other variable as the predictor.
+
+```{r}
+#deltrain= glm(satisfaction ~ Age, data = datatrain , family = binomial(link = "logit"))
+logmodeltrain= glm(satisfaction ~ ., data = datatrain , family = binomial(link = "logit"))
+summary(logmodeltrain)
+coef = logmodeltrain$coefficients
+```
+
+After fitting the model, the next step would be to check the model utility. To check the model’s usefulness, a probability benchmark of 0.5 was set. Since the output of the logistic regression is a probability, values greater than 0.5 were classified as “satisfied” and values less than 0.5 were classified as "neutral or dissatisfied". Subsequently, the accuracy of the logistic model is 0.8751 meaning the model predicts 87.51% of the overall data set correctly. The satisfied customer accuracy, sensitivity, is 0.8361 meaning the model correctly predicts 83.61% of the satisfied passengers in the overall data set accurately. The neutral/dissatisfied customer accuracy, specificity, is 0.9049 meaning the model correctly predicts 90.49% of the neutral or dissatisfied passengers in the overall data set. 
+
+```{r}
+estprob = logmodeltrain$fitted.values
+predSatisfaction = estprob
+predSatisfaction[estprob <= 0.5] = "neutral or dissatisfied"
+predSatisfaction[estprob > 0.5] = "satisfied"
+predSatisfaction = as.factor(predSatisfaction)
+library(caret)
+confusionMatrix(predSatisfaction, datatrain$satisfaction, positive = "satisfied")
+```
+
+Next, we will fit the ROC Curve The results obtained from fitting the ROC Curve suggest that our model does better than random guessing with AUC of 0.9276.
+
+```{r}
+library(pROC)
+out = roc(datatrain$satisfaction ~ estprob, plot = TRUE )
+auc(out)
+```
+
+After checking the models utility, the next step was to check its validity, and this is achieved by conducting the pearson chi square and deviance test. Since the deviance test produces a p- value greater than 0.05, we can go ahead and use the model for prediction because there is no evidence of lack of fit. 
+
+```{r}
+pear.res = residuals(logmodeltrain, type = "pearson")
+pear.stat = sum(pear.res^2)
+(df = logmodeltrain$df.residual)
+pchisq( pear.stat, df, lower.tail = FALSE)
+```
+
+
+```{r}
+deviance.res = residuals(logmodeltrain)
+(deviance.stat = sum(deviance.res^2)) 
+(df = logmodeltrain$df.residual)
+pchisq(logmodeltrain$deviance, df, lower.tail = FALSE )
+```
+
+
+## 3. Results
+
+To determine the odds of the variables that positively and negatively impact customer satisfaction, the exponents of the respective variables coefficient was taken and the results can be interpreted as follows:
+```{r}
+coefExp = exp(coef)
+round(coefExp,4)
+```
+
+From the results above, the variables that significantly increase the odds of passenger satisfaction are customer type, in-flight Wi-Fi service, Online boarding, On-board service, Leg room service, Check-in service, and Cleanliness. Looking at the odds ratio of the variables in Table 5, “Customer.TypeLoyal.Customer” stands; this means that loyal customers are 7.65 times more likely to be satisfied than disloyal customers. 
+
+Furthermore, the variable “Type.of.TravelPersonalTravel” really draws attention because it has an odds ratio of 0.0657. Therefore, the likelihood of satisfaction among passengers on personal travel was 0.0657 times smaller than passengers on business travel; this is low, and it means that a lot of passengers traveling on personal travel are not satisfied. Similarly, the class a passenger travels by also reduces the likelihood of satisfaction. For instance, half of the passengers that travel in either “Eco” or “Eco Plus” have half the likelihood of being satisfied than passengers traveling in business class. Therefore, the airline can improve its services to passengers on personal travel, Eco class and Eco plus class. 
+
+
+## 4. Conclusion
+
+Based on our logistical regression model, it is evident that customer type, class, and type of travel also affect passenger satisfaction. Therefore, we recommend that airline companies should focus on how to convert disloyal customers into loyal customers, improve services for passengers on personal travel, Eco class and Eco plus class and look to upgrade the services in Online Capabilities.  
+
+
+
